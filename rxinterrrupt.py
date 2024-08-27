@@ -76,3 +76,12 @@ if __name__ == '__main__':
     main()
 
 """
+
+if (len(data) > 0):
+    # print("Buraya girdi")
+    paketNum = 0
+    print(my_list)
+    for item in my_list:
+        # print("En iÃ§te")
+        # Send each item as bytes (decode from hex to bytes)
+        ser.write(bytes.fromhex(item))
