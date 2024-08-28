@@ -34,6 +34,7 @@ def interpretation(byte):
             if (sum % 9 == int(byte,16)):
                 print("Data True")
                 sum=0
+                print(testList)
             else:
                 print("Data False")
                 sum=0

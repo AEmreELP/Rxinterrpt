@@ -2,11 +2,12 @@ import serial
 import select
 import time
 
+from DatabaseOperations.mongoDbAtlasConneciton import insertToDB
+
 testList = []
 crc = 0
 indexTrack = -1
 dn = 0
-
 
 def interpretation(byte):
     global testList
@@ -14,7 +15,6 @@ def interpretation(byte):
     global crc
     global indexTrack
     global dn
-
     # print(f" Header is:{data[0]}")
 
     if str(byte) > "7F":
