@@ -67,6 +67,7 @@ if __name__ == '__main__':
 
     for byte in testList:
         interpretation(byte)
+        testList.pop(-1)
 
 
 
