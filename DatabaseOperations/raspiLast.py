@@ -3,6 +3,7 @@ import select
 import time
 import datetime
 import threading
+from collections import deque
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 
@@ -12,9 +13,11 @@ indexTrack = -1
 dn = 0
 sum = 0
 resultList = []
-storeData = []
+storeData = deque()
+
+
 def insertToDB(database, collection, data):
-    uri = "mongodb+srv://ASSAN:sifre@batterymanagementcluste.wyc4v.mongodb.net/?retryWrites=true&w=majority&appName=BatteryManagementCluster"
+    uri = "mongodb+srv://ASSAN:Emre.E12@batterymanagementcluste.wyc4v.mongodb.net/?retryWrites=true&w=majority&appName=BatteryManagementCluster"
     client = MongoClient(uri, server_api=ServerApi('1'))
 
     db = client[f'{database}']
@@ -23,6 +26,7 @@ def insertToDB(database, collection, data):
     document = data
     insert_doc = collection.insert_one(document)
     client.close()
+
 
 def interpretation(byte):
     global testList
@@ -89,6 +93,7 @@ def interpretation(byte):
         resultList.append(byte)
         sum = sum + int(byte, 16)
 
+
 def storeOurDatas(data):
     global storeData
     storeData.append(data)
@@ -111,30 +116,37 @@ def main():
 
             if (len(my_list) > 0):
                 for item in my_list:
-                    a = interpretation(item)
+                    a = threading.Thread(target=interpretation, args=(item,)).start()
                     my_list = []
                     if (a != None):
                         print(a[0])
                         now = time.localtime(time.time())
                         start = time.time()
                         a.append(time.strftime("%y/%m/%d %H:%M", now))
-                        saltData = int(a[4], 16) * 100 + int(a[5], 16) * 10 + int(a[6], 16) + int(a[7], 16) * 0.1 + int(a[8], 16) * 0.10 + int(a[9], 16) * 0.001
+                        saltData = int(a[4], 16) * 100 + int(a[5], 16) * 10 + int(a[6], 16) + int(a[7], 16) * 0.1 + int(
+                            a[8], 16) * 0.10 + int(a[9], 16) * 0.001
                         storeOurDatas(a)
+                        print("Store Data is printing")
                         print(storeData)
-                        insertToDB("Yasin", "Emre",
-                                   {"header": a[0], "K constant": a[1], "Command": a[2], "Data Length": a[3],
-                                    "Data": saltData, "CRC": a[10], "Time Now": a[11]})
+                        if storeData is not None:
+                            insertToDB("Yasin", "Emre",
+                                       {"header": storeData[0][0], "K constant": storeData[0][1],
+                                        "Command": storeData[0][2], "Data Length": storeData[0][3],
+                                        "Data": saltData, "CRC": storeData[0][10], "Time Now": storeData[0][11]})
+                            storeData.popleft()
+
                         print(a)
                         a = []
                         print(a)
                         end = time.time()
-                        print(end-start)
+                        print(end - start)
                         print(threading.active_count())
                         print(threading.enumerate())
     except KeyboardInterrupt:
         print("Exiting program.")
     finally:
         ser.close()
+
 
 if __name__ == '__main__':
     main()
