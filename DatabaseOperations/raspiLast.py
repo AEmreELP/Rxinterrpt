@@ -12,9 +12,9 @@ indexTrack = -1
 dn = 0
 sum = 0
 resultList = []
-
+storeData = []
 def insertToDB(database, collection, data):
-    uri = "mongodb+srv://ASSAN:Sifreliii@batterymanagementcluste.wyc4v.mongodb.net/?retryWrites=true&w=majority&appName=BatteryManagementCluster"
+    uri = "mongodb+srv://ASSAN:sifre@batterymanagementcluste.wyc4v.mongodb.net/?retryWrites=true&w=majority&appName=BatteryManagementCluster"
     client = MongoClient(uri, server_api=ServerApi('1'))
 
     db = client[f'{database}']
@@ -89,21 +89,10 @@ def interpretation(byte):
         resultList.append(byte)
         sum = sum + int(byte, 16)
 
-def resultListSetEmpty():
-    global resultList
-    resultList = []
+def storeOurDatas(data):
+    global storeData
+    storeData.append(data)
 
-def summation(byte):
-    global indexTrack
-    global sum
-    global dn
-    if (indexTrack > -1):
-        sum = sum + int(byte, 16)
-
-    if dn > 0:
-        sum = sum % 9
-
-    return sum
 
 def main():
     paketNum = 0
@@ -130,6 +119,8 @@ def main():
                         start = time.time()
                         a.append(time.strftime("%y/%m/%d %H:%M", now))
                         saltData = int(a[4], 16) * 100 + int(a[5], 16) * 10 + int(a[6], 16) + int(a[7], 16) * 0.1 + int(a[8], 16) * 0.10 + int(a[9], 16) * 0.001
+                        storeOurDatas(a)
+                        print(storeData)
                         insertToDB("Yasin", "Emre",
                                    {"header": a[0], "K constant": a[1], "Command": a[2], "Data Length": a[3],
                                     "Data": saltData, "CRC": a[10], "Time Now": a[11]})
@@ -146,10 +137,4 @@ def main():
         ser.close()
 
 if __name__ == '__main__':
-    indexTrack = -1
-    y = 0
-    n = 0
-    dn = 0
-    myList = []
-    crc = 0
     main()
