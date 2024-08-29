@@ -13,7 +13,7 @@ resultList = []
 
 
 def insertToDB(database, collection, data):
-    uri = "mongodb+srv://ASSAN:Assan*24.@batterymanagementcluste.wyc4v.mongodb.net/?retryWrites=true&w=majority&appName=BatteryManagementCluster"
+    uri = "mongodb+srv://ASSAN:sifre!!!!!@batterymanagementcluste.wyc4v.mongodb.net/?retryWrites=true&w=majority&appName=BatteryManagementCluster"
     client = MongoClient(uri, server_api=ServerApi('1'))
 
     db = client[f'{database}']
@@ -54,7 +54,12 @@ def interpretation(byte):
             if (sum % 9 == int(byte, 16)):
                 print("Data True")
                 sum = 0
-                return resultList
+                try:
+                    return resultList
+                except:
+                    print("interpretation Error")
+                finally:
+                    resultList=[]
             else:
                 print("Data False")
                 sum = 0
@@ -125,24 +130,17 @@ def main():
 
             if select.select([ser], [], [], 0)[0]:
                 # Use select to wait for data to be available
-
-                # Read data from serial port
                 data = ser.read_all()
                 if data:
                     # Print the integer and its hexadecimal representation
                     # Add the hexadecimal representation to the list
                     my_list.append(data.hex())
                     # print(f'Initial list: {my_list}')
-                    paketNum = paketNum + 1
+
 
             if (len(my_list) > 0):
-                # print("Buraya girdi")
-                paketNum = 0
-                # print(my_list)
-                # print(len(my_list))
 
                 for item in my_list:
-                    # print("En iÃ§te")
                     # Send each item as bytes (decode from hex to bytes)
                     # ser.write(bytes.fromhex(item))
                     a = interpretation(item)
@@ -159,8 +157,8 @@ def main():
                         insertToDB("Yasin", "Emre",
                                    {"header": a[0], "K constant": a[1], "Command": a[2], "Data Lenght": a[3],
                                     "Data": saltData, "CRC": a[10]})
-                        resultListSetEmpty()
-                        print("a will set empty")
+                        a=[]
+                        print(a)
 
                 # a=summation(item)
                 # print(a)
