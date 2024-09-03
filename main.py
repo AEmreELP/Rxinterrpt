@@ -19,13 +19,14 @@ dn = 0
 sum = 0
 resultList = []
 
+
 # MongoDB insert function
 def insertToDB(database, collection, data):
-    client = MongoClient(uri, server_api=ServerApi('1'))
+    client = MongoClient(uri, server_api=ServerApi('1'), serverSelectionTimeoutMS=60000)
     db = client[database]
     coll = db[collection]
     coll.insert_one(data)
-    client.close()
+    # client.close()    #When I run this code After a minute connection is closing and its not inster data to DB
 
 
 def interpretation(byte):
@@ -98,7 +99,7 @@ def interpretation(byte):
 def read_serial(ser):
     paketNum = 0
     my_list = []
-    
+
     while True:
         if select.select([ser], [], [], 0)[0]:
             # Use select to wait for data to be available
@@ -124,9 +125,15 @@ def db_worker():
         data = data_queue.get()
         if data is None:
             break  # Sentinel for exit
-        insertToDB("BatteryManagement", "Cluster", {"data": data})
+        saltData = int(data[4], 16) * 100 + int(data[5], 16) * 10 + int(data[6], 16) + int(data[7], 16) * 0.1 + int(
+            data[8], 16) * 0.10 + int(data[9], 16) * 0.001
+        saltData = round(saltData, 4)
+        insertToDB("BatteryManagement", "Cluster",
+                   {"Header": int(data[0], 16), "K": int(data[1], 16), "Type": int(data[2], 16),
+                    "Lenght": int(data[3], 16), "Data": saltData, "CRC": int(data[-1], 16)})
         data_queue.task_done()
         print("Data inserted into DB:", data)
+        print("Success Code : 200")
 
 
 def main():
