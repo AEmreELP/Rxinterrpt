@@ -126,11 +126,11 @@ def db_worker():
         if data is None:
             break  # Sentinel for exit
         saltData = int(data[4], 16) * 100 + int(data[5], 16) * 10 + int(data[6], 16) + int(data[7], 16) * 0.1 + int(
-            data[8], 16) * 0.10 + int(data[9], 16) * 0.001
+            data[8], 16) * 0.01 + int(data[9], 16) * 0.001
         saltData = round(saltData, 4)
-        insertToDB("BatteryManagement", "Cluster",
-                   {"Header": int(data[0], 16), "K": int(data[1], 16), "Type": int(data[2], 16),
-                    "Lenght": int(data[3], 16), "Data": saltData, "CRC": int(data[-1], 16)})
+        insertToDB("BatteryManagement", "clusters",
+                   {"header": int(data[0], 16), "k": int(data[1], 16), "type": int(data[2], 16),
+                    "lenght": int(data[3], 16), "data": saltData, "crc": int(data[-1], 16)})
         data_queue.task_done()
         print("Data inserted into DB:", data)
         print("Success Code : 200")
