@@ -22,7 +22,7 @@ resultList = []
 
 # MongoDB insert function
 def insertToDB(database, collection, data):
-    client = MongoClient(uri, server_api=ServerApi('1'), serverSelectionTimeoutMS=60000)
+    client = MongoClient(uri, server_api=ServerApi('1'), serverSelectionTimeoutMS=600000)
     db = client[database]
     coll = db[collection]
     coll.insert_one(data)
@@ -62,6 +62,8 @@ def interpretation(byte):
                 finally:
                     resultList = []
             else:
+                print(resultList)
+                insertToDB("BatteryManagement", "logs",{"data":resultList,"Code":400})
                 print("Data False")
                 sum = 0
                 resultList = []
@@ -103,7 +105,7 @@ def read_serial(ser):
     while True:
         if select.select([ser], [], [], 0)[0]:
             # Use select to wait for data to be available
-            data = ser.read_all()
+            data = ser.read()
             if data:
                 my_list.append(data.hex())
                 paketNum += 1
@@ -129,9 +131,11 @@ def db_worker():
             data[8], 16) * 0.01 + int(data[9], 16) * 0.001
         saltData = round(saltData, 4)
         insertToDB("BatteryManagement", "clusters",
-                   {"header": int(data[0], 16), "k": int(data[1], 16), "type": int(data[2], 16),
-                    "lenght": int(data[3], 16), "data": saltData, "crc": int(data[-1], 16)})
+                   {"header": int(data[0], 16), "k": int(data[1], 16), "Dtype": int(data[2], 16),
+                    "length": int(data[3], 16), "data": saltData, "crc": int(data[-1], 16),
+                    "time": time.strftime("%d.%m.%Y")})
         data_queue.task_done()
+        insertToDB("BatteryManagement", "logs",{"data":data,"Code":200})
         print("Data inserted into DB:", data)
         print("Success Code : 200")
 
@@ -140,7 +144,7 @@ def main():
     # Set up serial connection (adjust parameters as needed)
     ser = serial.Serial(
         port="/dev/serial0",  # Update with your serial port
-        baudrate=56000,
+        baudrate=115200,
         timeout=0  # Non-blocking read
     )
 
