@@ -19,14 +19,35 @@ dn = 0
 sum = 0
 resultList = []
 
-
 # MongoDB insert function
-def insertToDB(database, collection, data):
-    client = MongoClient(uri, server_api=ServerApi('1'), serverSelectionTimeoutMS=600000)
-    db = client[database]
-    coll = db[collection]
-    coll.insert_one(data)
-    # client.close()    #When I run this code After a minute connection is closing and its not inster data to DB
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+import time
+
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+from pymongo import MongoClient
+from pymongo.server_api import ServerApi
+import time
+
+
+def insertToDB(database, collection, data, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            client = MongoClient(uri, server_api=ServerApi('1'), serverSelectionTimeoutMS=1000000)
+            db = client[database]
+            coll = db[collection]
+            coll.insert_one(data)
+            print("Veri bayla eklendi.")
+            return
+        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+            print(f"Baglanti hatasi: {e}. Yeniden deneniyor... ({attempt + 1}/{max_retries})")
+            time.sleep(5)  # 5 saniye bekle ve tekrar dene
+        except Exception as e:
+            print(f"Beklenmeyen hata: {e}")
+            return
+        finally:
+            if 'client' in locals():
+                client.close()
+    print("Maksimum yeniden deneme sayisina ulasildi. Veri eklenemedi.")
 
 
 def interpretation(byte):
@@ -63,7 +84,7 @@ def interpretation(byte):
                     resultList = []
             else:
                 print(resultList)
-                insertToDB("BatteryManagement", "logs",{"data":resultList,"Code":400})
+                insertToDB("BatteryManagement", "logs", {"data": data, "Code": 200, "time": time.strftime("%d.%m.%Y")})
                 print("Data False")
                 sum = 0
                 resultList = []
@@ -133,9 +154,10 @@ def db_worker():
         insertToDB("BatteryManagement", "clusters",
                    {"header": int(data[0], 16), "k": int(data[1], 16), "Dtype": int(data[2], 16),
                     "length": int(data[3], 16), "data": saltData, "crc": int(data[-1], 16),
-                    "time": time.strftime("%d.%m.%Y")})
+                    "time": time.strftime("%d.%m.%Y, %H:%M:%S")})
         data_queue.task_done()
-        insertToDB("BatteryManagement", "logs",{"data":data,"Code":200})
+        insertToDB("BatteryManagement", "logs",
+                   {"data": data, "Code": 200, "time": time.strftime("%d.%m.%Y, %H:%M:%S")})
         print("Data inserted into DB:", data)
         print("Success Code : 200")
 
