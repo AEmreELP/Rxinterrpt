@@ -4,187 +4,163 @@ import time
 import datetime
 import threading
 import queue
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 from pymongo.server_api import ServerApi
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 
 # Setup MongoDB Client URI
 uri = "mongodb+srv://ASSAN:sifre@batterymanagementcluste.wyc4v.mongodb.net/?retryWrites=true&w=majority&appName=BatteryManagementCluster"
 
-# Thread-safe queue to hold data
+# Thread-güvenli veri kuyruğu
 data_queue = queue.Queue()
-testList = []
-crc = 0
-indexTrack = -1
-dn = 0
-sum = 0
-resultList = []
 
-# MongoDB insert function
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
-import time
-
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
-from pymongo import MongoClient
-from pymongo.server_api import ServerApi
-import time
+# Global değişkenler
+testList, resultList = [], []
+crc, indexTrack, dn, sum = 0, -1, 0, 0
 
 
-def insertToDB(database, collection, data, max_retries=3):
+def insert_to_db(database, collection, data, max_retries=3):
+    client = None
     for attempt in range(max_retries):
         try:
-            client = MongoClient(uri, server_api=ServerApi('1'), serverSelectionTimeoutMS=1000000)
+            client = MongoClient(uri, server_api=ServerApi('1'), serverSelectionTimeoutMS=10000)
             db = client[database]
             coll = db[collection]
-            coll.insert_one(data)
-            print("Veri bayla eklendi.")
+
+            if isinstance(data, list):
+                coll.bulk_write([UpdateOne({'_id': item['time']}, {'$set': item}, upsert=True) for item in data])
+            else:
+                coll.update_one({'_id': data['time']}, {'$set': data}, upsert=True)
+
+            print("Veri başarıyla eklendi.")
             return
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-            print(f"Baglanti hatasi: {e}. Yeniden deneniyor... ({attempt + 1}/{max_retries})")
-            time.sleep(5)  # 5 saniye bekle ve tekrar dene
+            print(f"Bağlantı hatası: {e}. Yeniden deneniyor... ({attempt + 1}/{max_retries})")
+            time.sleep(2)
         except Exception as e:
             print(f"Beklenmeyen hata: {e}")
             return
         finally:
-            if 'client' in locals():
+            if client:
                 client.close()
-    print("Maksimum yeniden deneme sayisina ulasildi. Veri eklenemedi.")
+    print("Maksimum yeniden deneme sayısına ulaşıldı. Veri eklenemedi.")
 
 
 def interpretation(byte):
-    global testList
-    global dataLenght
-    global crc
-    global indexTrack
-    global dn
-    global sum
-    global resultList
+    global testList, dataLenght, crc, indexTrack, dn, sum, resultList
 
-    if str(byte) > "7F":
-        y = int(byte, 16) & 7
+    byte_int = int(byte, 16)
+
+    if byte_int > 0x7F:
         indexTrack = 0
-        testList.append(byte)
-        resultList.append(byte)
-        sum = sum + int(byte, 16)
-
+        testList = [byte]
+        resultList = [byte]
+        sum = byte_int
     elif indexTrack > 2:
-        if (indexTrack > int(dataLenght, 16) + 2):
+        if indexTrack > int(dataLenght, 16) + 2:
             crc = byte
-            print("Data Geldi")
             dn = 0
             indexTrack = -1
             resultList.append(byte)
-            if (sum % 9 == int(byte, 16)):
-                print("Data True")
+            if sum % 9 == byte_int:
                 sum = 0
-                try:
-                    return resultList
-                except:
-                    print("interpretation Error")
-                finally:
-                    resultList = []
+                return resultList
             else:
-                print(resultList)
-                insertToDB("BatteryManagement", "logs", {"data": data, "Code": 200, "time": time.strftime("%d.%m.%Y")})
-                print("Data False")
+                insert_to_db("BatteryManagement", "logs",
+                             {"data": resultList, "Code": 200, "time": time.strftime("%d.%m.%Y")})
                 sum = 0
                 resultList = []
         else:
             testList.append(byte)
             resultList.append(byte)
-            indexTrack = indexTrack + 1
-            dn = dn + 1
-            sum = sum + int(byte, 16)
-
+            indexTrack += 1
+            dn += 1
+            sum += byte_int
     elif indexTrack == 2:
         dataLenght = byte
         testList.append(byte)
         resultList.append(byte)
         indexTrack = 3
-        sum = sum + int(byte, 16)
-
+        sum += byte_int
     elif indexTrack == 1:
-        komut = byte
         testList.append(byte)
         resultList.append(byte)
         indexTrack = 2
-        sum = sum + int(byte, 16)
-
+        sum += byte_int
     elif indexTrack == 0:
-        k = byte
-        n = ((0 * 128) + int(k, 16))
         indexTrack = 1
         testList.append(byte)
         resultList.append(byte)
-        sum = sum + int(byte, 16)
+        sum += byte_int
 
 
-# Function to read data from the serial port in a separate thread
 def read_serial(ser):
-    paketNum = 0
-    my_list = []
-
+    buffer = bytearray()
     while True:
         if select.select([ser], [], [], 0)[0]:
-            # Use select to wait for data to be available
-            data = ser.read()
-            if data:
-                my_list.append(data.hex())
-                paketNum += 1
-
-        if my_list:
-            paketNum = 0
-            for item in my_list:
-                interpreted_data = interpretation(item)
+            buffer.extend(ser.read(ser.in_waiting))
+            while buffer:
+                interpreted_data = interpretation(f"{buffer[0]:02x}")
                 if interpreted_data is not None:
-                    # Add interpreted data to the thread-safe queue
                     data_queue.put(interpreted_data)
-            my_list = []
+                buffer = buffer[1:]
 
 
-# Function to insert data into the database in a separate thread
 def db_worker():
+    batch = []
+    last_insert = time.time()
     while True:
-        # Get data from the queue and insert into the database
-        data = data_queue.get()
-        if data is None:
-            break  # Sentinel for exit
-        saltData = int(data[4], 16) * 100 + int(data[5], 16) * 10 + int(data[6], 16) + int(data[7], 16) * 0.1 + int(
-            data[8], 16) * 0.01 + int(data[9], 16) * 0.001
-        saltData = round(saltData, 4)
-        insertToDB("BatteryManagement", "clusters",
-                   {"header": int(data[0], 16), "k": int(data[1], 16), "Dtype": int(data[2], 16),
-                    "length": int(data[3], 16), "data": saltData, "crc": int(data[-1], 16),
-                    "time": time.strftime("%d.%m.%Y, %H:%M:%S")})
-        data_queue.task_done()
-        insertToDB("BatteryManagement", "logs",
-                   {"data": data, "Code": 200, "time": time.strftime("%d.%m.%Y, %H:%M:%S")})
-        print("Data inserted into DB:", data)
-        print("Success Code : 200")
+        try:
+            data = data_queue.get(timeout=1)
+            if data is None:
+                break
+
+            salt_data = sum(int(data[i], 16) * (10 ** (3 - i)) for i in range(4, 10)) / 1000
+            salt_data = round(salt_data, 4)
+
+            record = {
+                "header": int(data[0], 16),
+                "k": int(data[1], 16),
+                "Dtype": int(data[2], 16),
+                "length": int(data[3], 16),
+                "data": salt_data,
+                "crc": int(data[-1], 16),
+                "time": time.strftime("%d.%m.%Y, %H:%M:%S")
+            }
+
+            batch.append(record)
+
+            if len(batch) >= 100 or (time.time() - last_insert) > 5:
+                insert_to_db("BatteryManagement", "clusters", batch)
+                insert_to_db("BatteryManagement", "logs",
+                             {"data": batch, "Code": 200, "time": time.strftime("%d.%m.%Y, %H:%M:%S")})
+                batch = []
+                last_insert = time.time()
+
+            data_queue.task_done()
+        except queue.Empty:
+            if batch:
+                insert_to_db("BatteryManagement", "clusters", batch)
+                insert_to_db("BatteryManagement", "logs",
+                             {"data": batch, "Code": 200, "time": time.strftime("%d.%m.%Y, %H:%M:%S")})
+                batch = []
+                last_insert = time.time()
 
 
 def main():
-    # Set up serial connection (adjust parameters as needed)
-    ser = serial.Serial(
-        port="/dev/serial0",  # Update with your serial port
-        baudrate=115200,
-        timeout=0  # Non-blocking read
-    )
+    ser = serial.Serial(port="/dev/serial0", baudrate=115200, timeout=0)
 
-    # Create and start threads
     threading.Thread(target=read_serial, args=(ser,), daemon=True).start()
     db_thread = threading.Thread(target=db_worker, daemon=True)
     db_thread.start()
 
     try:
-        # Main thread can perform other tasks or just wait for threads to finish
         while True:
-            time.sleep(1)  # Simulate some work (e.g., logging, monitoring)
+            time.sleep(1)
     except KeyboardInterrupt:
-        print("Exiting program.")
+        print("Program sonlandırılıyor.")
     finally:
-        # Clean up
         ser.close()
-        # Insert 'None' as a sentinel to shut down db_worker thread
         data_queue.put(None)
         db_thread.join()
 
