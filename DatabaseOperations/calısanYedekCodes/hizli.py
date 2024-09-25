@@ -28,6 +28,7 @@ def insert_to_db(database, collection, data, max_retries=3):
             coll = db[collection]
 
             if isinstance(data, list):
+                print("it is updated:", data)
                 coll.bulk_write([UpdateOne({'_id': item['time']}, {'$set': item}, upsert=True) for item in data])
             else:
                 coll.update_one({'_id': data['time']}, {'$set': data}, upsert=True)
@@ -116,7 +117,7 @@ def db_worker():
                 break
 
             saltData = int(data[4], 16) * 100 + int(data[5], 16) * 10 + int(data[6], 16) + int(data[7], 16) * 0.1 + int(
-                            data[8], 16) * 0.10 + int(data[9], 16) * 0.001
+                            data[8], 16) * 0.01 + int(data[9], 16) * 0.001
             salt_data = round(saltData, 4)
 
             record = {
@@ -129,10 +130,12 @@ def db_worker():
                 "time": time.strftime("%d.%m.%Y, %H:%M:%S")
             }
 
+            print("batche eklenen veri", record)
             batch.append(record)
 
+
             if len(batch) >= 100 or (time.time() - last_insert) > 5:
-                insert_to_db("BatteryManagement", "clusters", batch)
+                insert_to_db("BatteryManagement", "clusters", {"data":batch})
                 insert_to_db("BatteryManagement", "logs",
                              {"data": batch, "Code": 200, "time": time.strftime("%d.%m.%Y, %H:%M:%S")})
                 batch = []
@@ -141,7 +144,7 @@ def db_worker():
             data_queue.task_done()
         except queue.Empty:
             if batch:
-                insert_to_db("BatteryManagement", "clusters", batch)
+                insert_to_db("BatteryManagement", "clusters",{"data":batch})
                 insert_to_db("BatteryManagement", "logs",
                              {"data": batch, "Code": 200, "time": time.strftime("%d.%m.%Y, %H:%M:%S")})
                 batch = []
