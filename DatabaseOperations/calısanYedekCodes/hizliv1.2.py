@@ -5,6 +5,7 @@ import datetime
 import threading
 import queue
 import math
+import struct
 from pymongo import MongoClient, UpdateOne
 from pymongo.server_api import ServerApi
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
@@ -238,10 +239,36 @@ def db_worker():
                 last_insert = time.time()
 
 
+input_event = threading.Event()
+
+
+def send_data_uart(port='/dev/serial0', baudrate=115200, data_to_send=(131, 10)):
+    try:
+        with serial.Serial(port, baudrate, timeout=1) as ser:
+            while True:
+                if input_event.wait():
+                    two_byte_data = struct.pack('>BB', data_to_send[0], data_to_send[1])
+                    ser.write(two_byte_data)
+                    print(f"Gonderilen veri: {data_to_send} (hex: {two_byte_data.hex()})")
+                    input_event.clear()
+    except serial.SerialException as e:
+        print(f"UART hatasi: {e}")
+    except KeyboardInterrupt:
+        print("Program kullanici tarafindan durduruldu.")
+
+
+def check_input():
+    while True:
+        input()  # Enter bekle
+        input_event.set()
+
+
 def main():
     ser = serial.Serial(port="/dev/serial0", baudrate=115200, timeout=0)
 
     threading.Thread(target=read_serial, args=(ser,), daemon=True).start()
+    threading.Thread(target=send_data_uart, args=('/dev/serial0', 115200, (131, 10)), daemon=True).start()
+    threading.Thread(target=check_input, daemon=True).start()
     db_thread = threading.Thread(target=db_worker, daemon=True)
     db_thread.start()
 
