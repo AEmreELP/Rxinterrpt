@@ -173,15 +173,32 @@ def db_worker():
                     "time": time.strftime("%d.%m.%Y, %H:%M:%S"),
                     "code": 200
                 }
-                print("************************** \t", Calc_SOC(salt_data))
+                print("SOC degeri \t", Calc_SOC(salt_data))
                 print("batche eklenen veri", record)
                 batch.append(record)
 
-            if (int(data[2], 16) == 11):
                 record = {
                     "header": int(data[0], 16),
                     "k": int(data[1], 16),
-                    "Dtype": int(data[2], 16),
+                    "Dtype": 10,
+                    "length": int(data[3], 16),
+                    "data": salt_data,
+                    "crc": int(data[-1], 16),
+                    "time": time.strftime("%d.%m.%Y, %H:%M:%S"),
+                    "code": 200
+                }
+
+                print(salt_data)
+                print("batche eklenen veri", record)
+
+                batch.append(record)
+
+
+            elif (int(data[2], 16) == 11):
+                record = {
+                    "header": int(data[0], 16),
+                    "k": int(data[1], 16),
+                    "Dtype": 11,
                     "length": int(data[3], 16),
                     "data": Calc_SOH(salt_data),
                     "crc": int(data[-1], 16),
@@ -193,9 +210,9 @@ def db_worker():
                 record = {
                     "header": int(data[0], 16),
                     "k": int(data[1], 16),
-                    "Dtype": 10,
+                    "Dtype": int(data[2], 16),
                     "length": int(data[3], 16),
-                    "data": Calc_SOC(salt_data),
+                    "data": salt_data,
                     "crc": int(data[-1], 16),
                     "time": time.strftime("%d.%m.%Y, %H:%M:%S"),
                     "code": 200
